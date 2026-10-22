@@ -1,0 +1,2 @@
+import { ruangotp } from '@/lib/ruangotp'
+export async function GET(){ try{ const res = await ruangotp.countries(); return Response.json(res.data) }catch(e:any){ return Response.json({success:false},{status:500}) } }
