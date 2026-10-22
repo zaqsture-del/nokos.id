@@ -1,0 +1,55 @@
+"use client"
+import { useEffect, useState } from 'react'
+export default function Zaqsture(){
+  const [countries,setCountries]=useState<any[]>([])
+  const [countryId,setCountryId]=useState(6)
+  const [services,setServices]=useState<any[]>([])
+  const [order,setOrder]=useState<any>(null)
+  const [otp,setOtp]=useState('')
+  const [search,setSearch]=useState('')
+  const [log,setLog]=useState('Siap')
+
+  useEffect(()=>{ fetch('/api/countries').then(r=>r.json()).then(d=>setCountries(d.data||[])) },[])
+  const loadServices = async (id:number)=>{
+    setCountryId(id); setLog('Loading...')
+    const res = await fetch(`/api/services?country=${id}`).then(r=>r.json())
+    setServices(res.data||[]); setLog(`${res.data?.length||0} layanan`)
+  }
+  useEffect(()=>{ loadServices(6) },[])
+  const buy = async (code:string)=>{
+    setLog('Cek harga...')
+    const priceRes = await fetch(`/api/price?service=${code}&country=${countryId}`).then(r=>r.json())
+    const providers = priceRes.data || []
+    const prov = [...providers].sort((a:any,b:any)=>a.price-b.price)[0]
+    if(!prov){ setLog('Stok kosong'); return }
+    setLog(`Beli ${code} Rp ${prov.price}`)
+    const buyRes = await fetch('/api/buy',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ service: code, country: countryId, provider_id: prov.provider_id, expected_price: prov.price })}).then(r=>r.json())
+    const data = buyRes.data || buyRes
+    setOrder(data)
+    const oid = data.order_id
+    const interval = setInterval(async()=>{
+      const s = await fetch(`/api/check?order_id=${oid}`).then(r=>r.json())
+      const d = s.data || s
+      if(d.otp || d.sms){ setOtp(d.otp||d.sms); setLog('OTP MASUK!'); clearInterval(interval) }
+    },3500)
+  }
+  const filtered = services.filter((s:any)=>(s.code||s.service||'').toLowerCase().includes(search.toLowerCase()))
+  return (
+    <div className="min-h-screen p-4">
+      <h1 className="text-2xl font-black">ZAQSTURE</h1>
+      <p className="text-xs text-zinc-400">Platform Layanan Nokos Terbaik</p>
+      <select value={countryId} onChange={e=>loadServices(Number(e.target.value))} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 w-full mt-4">
+        {countries.map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cari wa, telegram, ig..." className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 w-full mt-2"/>
+      <p className="text-xs text-zinc-500 mt-2">{log}</p>
+      {order && <div className="mt-4 p-4 bg-zinc-900 rounded-xl">Nomor: {order.number||order.phone}<br/>OTP: <b className="text-green-400">{otp||'Menunggu...'}</b></div>}
+      <div className="grid grid-cols-2 gap-2 mt-4">
+        {filtered.map((s:any,i:number)=>{
+          const code=s.code||s.service
+          return <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3"><p className="font-bold text-sm">{s.name||code}</p><p className="text-xs text-zinc-500">{code}</p><button onClick={()=>buy(code)} className="mt-2 w-full bg-white text-black py-1.5 rounded-lg text-xs font-bold">BELI</button></div>
+        })}
+      </div>
+    </div>
+  )
+}
